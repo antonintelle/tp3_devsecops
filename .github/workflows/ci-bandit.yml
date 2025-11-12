@@ -28,29 +28,39 @@ jobs:
         run: |
           bandit -r . -f json -o bandit.json || true
 
-      - name: Upload Bandit report
-        uses: actions/upload-artifact@v4
-        with:
-          name: bandit-report
-          path: bandit.json
-
-      - name: Fail on MEDIUM/HIGH findings
-        id: fail-on-findings
+      - name: Show detailed Bandit findings
         run: |
           python - <<'PY'
-          import json,sys
+          import json, sys
+
           try:
-              doc=json.load(open('bandit.json'))
-          except Exception:
-              print('No bandit.json found — assuming no findings.')
-              sys.exit(0)
-          results=doc.get('results', [])
-          bad=[r for r in results if r.get('issue_severity','').upper() in ('MEDIUM','HIGH')]
-          print(f"Bandit findings total={len(results)}, medium_or_high={len(bad)}")
-          if len(bad)>0:
-              print('\nThe following medium/high findings were detected:')
-              for r in bad:
-                  print(f"- {r.get('filename')}:{r.get('line_number')} - {r.get('issue_text')} (severity={r.get('issue_severity')})")
+              with open("bandit.json") as f:
+                  data = json.load(f)
+          except Exception as e:
+              print("❌ Impossible de lire bandit.json :", e)
               sys.exit(1)
+
+          results = data.get("results", [])
+          if not results:
+              print("✅ Aucune vulnérabilité détectée par Bandit.")
+              sys.exit(0)
+
+          print(f"🔎 {len(results)} vulnérabilité(s) détectée(s) :\n")
+          severity_order = {"LOW": 1, "MEDIUM": 2, "HIGH": 3}
+
+          results.sort(key=lambda r: severity_order.get(r.get("issue_severity", "LOW").upper(), 0), reverse=True)
+
+          for r in results:
+              sev = r.get("issue_severity", "UNKNOWN").upper()
+              print(f"[{sev}] {r.get('filename')}:{r.get('line_number')}")
+              print(f"  ↳ {r.get('issue_text')}")
+              print(f"  (ID: {r.get('test_id')}, Confidence: {r.get('issue_confidence')})\\n")
+
+          if any(r.get("issue_severity", "").upper() in ("MEDIUM", "HIGH") for r in results):
+              print(\"❗Échec : vulnérabilités de sévérité moyenne ou haute détectées.\")
+              sys.exit(1)
+
+          print(\"✅ Seulement des vulnérabilités mineures détectées.\")
           sys.exit(0)
           PY
+
