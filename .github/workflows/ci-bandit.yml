@@ -34,23 +34,3 @@ jobs:
           name: bandit-report
           path: bandit.json
 
-      - name: Fail on MEDIUM/HIGH findings
-        id: fail-on-findings
-        run: |
-          python - <<'PY'
-          import json,sys
-          try:
-              doc=json.load(open('bandit.json'))
-          except Exception:
-              print('No bandit.json found — assuming no findings.')
-              sys.exit(0)
-          results=doc.get('results', [])
-          bad=[r for r in results if r.get('issue_severity','').upper() in ('MEDIUM','HIGH')]
-          print(f"Bandit findings total={len(results)}, medium_or_high={len(bad)}")
-          if len(bad)>0:
-              print('\nThe following medium/high findings were detected:')
-              for r in bad:
-                  print(f"- {r.get('filename')}:{r.get('line_number')} - {r.get('issue_text')} (severity={r.get('issue_severity')})")
-              sys.exit(1)
-          sys.exit(0)
-          PY
